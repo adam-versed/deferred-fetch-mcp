@@ -1,27 +1,73 @@
 import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
-import is_ip_private from "private-ip";
+import isIpPrivate from "private-ip";
 import { RequestPayload } from "./types.js";
+import fs from "fs/promises";
+import path from "path";
+import crypto from "crypto";
+
+const DOWNLOAD_DIR = path.resolve(process.cwd(), ".downloaded_files");
 
 export class Fetcher {
-  private static applyLengthLimits(text: string, maxLength: number, startIndex: number): string {
+  private static applyLengthLimits(
+    text: string,
+    maxLength: number,
+    startIndex: number
+  ): string {
     if (startIndex >= text.length) {
       return "";
     }
-    
+
     const end = Math.min(startIndex + maxLength, text.length);
     return text.substring(startIndex, end);
   }
-  private static async _fetch({
+
+  private static async ensureDownloadDirExists(): Promise<void> {
+    try {
+      await fs.mkdir(DOWNLOAD_DIR, { recursive: true });
+    } catch (error) {
+      throw new Error(
+        `Failed to create download directory: ${(error as Error).message}`
+      );
+    }
+  }
+
+  private static generateUniqueFilename(
+    url: string,
+    extension: string
+  ): string {
+    const timestamp =
+      new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z";
+    const randomString = crypto.randomBytes(4).toString("hex");
+
+    // Extract a sanitized filename from the URL
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split("/").filter(Boolean);
+    let baseName =
+      pathParts.length > 0 ? pathParts[pathParts.length - 1] : urlObj.hostname;
+
+    // Sanitize the base name
+    baseName = baseName.replace(/[^a-zA-Z0-9_\-]/g, "_").substring(0, 50);
+
+    return `${timestamp}-${randomString}-${baseName}.${extension}`;
+  }
+
+  private static async _fetchAndSave({
     url,
     headers,
-  }: RequestPayload): Promise<Response> {
+    outputFormat,
+  }: RequestPayload & {
+    outputFormat: "html" | "json" | "txt" | "markdown";
+  }): Promise<{ filePath: string; contentType: string }> {
     try {
-      if (is_ip_private(url)) {
+      await this.ensureDownloadDirExists();
+
+      if (isIpPrivate(url)) {
         throw new Error(
-          `Fetcher blocked an attempt to fetch a private IP ${url}. This is to prevent a security vulnerability where a local MCP could fetch privileged local IPs and exfiltrate data.`,
+          `Fetcher blocked an attempt to fetch a private IP ${url}. This is to prevent a security vulnerability where a local MCP could fetch privileged local IPs and exfiltrate data.`
         );
       }
+
       const response = await fetch(url, {
         headers: {
           "User-Agent":
@@ -33,10 +79,64 @@ export class Fetcher {
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
       }
-      return response;
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        throw new Error(`Failed to fetch ${url}: ${e.message}`);
+
+      let content: string;
+      let contentType: string;
+      let fileExtension: string;
+
+      // Process the content according to the outputFormat
+      switch (outputFormat) {
+        case "html":
+          content = await response.text();
+          contentType = "text/html";
+          fileExtension = "html";
+          break;
+
+        case "json":
+          const jsonData = await response.json();
+          content = JSON.stringify(jsonData, null, 2);
+          contentType = "application/json";
+          fileExtension = "json";
+          break;
+
+        case "txt":
+          const htmlForText = await response.text();
+          const dom = new JSDOM(htmlForText);
+          const document = dom.window.document;
+
+          const scripts = document.getElementsByTagName("script");
+          const styles = document.getElementsByTagName("style");
+          Array.from(scripts).forEach((script) => script.remove());
+          Array.from(styles).forEach((style) => style.remove());
+
+          content = document.body.textContent || "";
+          content = content.replace(/\s+/g, " ").trim();
+          contentType = "text/plain";
+          fileExtension = "txt";
+          break;
+
+        case "markdown":
+          const htmlForMarkdown = await response.text();
+          const turndownService = new TurndownService();
+          content = turndownService.turndown(htmlForMarkdown);
+          contentType = "text/markdown";
+          fileExtension = "md";
+          break;
+
+        default:
+          throw new Error(`Unsupported output format: ${outputFormat}`);
+      }
+
+      // Generate a unique filename and write the content to the file
+      const filename = this.generateUniqueFilename(url, fileExtension);
+      const filePath = path.join(DOWNLOAD_DIR, filename);
+
+      await fs.writeFile(filePath, content, "utf8");
+
+      return { filePath, contentType };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to fetch ${url}: ${error.message}`);
       } else {
         throw new Error(`Failed to fetch ${url}: Unknown error`);
       }
@@ -45,17 +145,18 @@ export class Fetcher {
 
   static async html(requestPayload: RequestPayload) {
     try {
-      const response = await this._fetch(requestPayload);
-      let html = await response.text();
-      
-      // Apply length limits
-      html = this.applyLengthLimits(
-        html, 
-        requestPayload.max_length ?? 5000, 
-        requestPayload.start_index ?? 0
-      );
-      
-      return { content: [{ type: "text", text: html }], isError: false };
+      const { filePath, contentType } = await this._fetchAndSave({
+        ...requestPayload,
+        outputFormat: "html",
+      });
+
+      return {
+        content: [
+          { type: "text", text: `File saved to: ${filePath}` },
+          { type: "text", text: `Content-Type: ${contentType}` },
+        ],
+        isError: false,
+      };
     } catch (error) {
       return {
         content: [{ type: "text", text: (error as Error).message }],
@@ -66,19 +167,16 @@ export class Fetcher {
 
   static async json(requestPayload: RequestPayload) {
     try {
-      const response = await this._fetch(requestPayload);
-      const json = await response.json();
-      let jsonString = JSON.stringify(json);
-      
-      // Apply length limits
-      jsonString = this.applyLengthLimits(
-        jsonString,
-        requestPayload.max_length ?? 5000,
-        requestPayload.start_index ?? 0
-      );
-      
+      const { filePath, contentType } = await this._fetchAndSave({
+        ...requestPayload,
+        outputFormat: "json",
+      });
+
       return {
-        content: [{ type: "text", text: jsonString }],
+        content: [
+          { type: "text", text: `File saved to: ${filePath}` },
+          { type: "text", text: `Content-Type: ${contentType}` },
+        ],
         isError: false,
       };
     } catch (error) {
@@ -91,29 +189,16 @@ export class Fetcher {
 
   static async txt(requestPayload: RequestPayload) {
     try {
-      const response = await this._fetch(requestPayload);
-      const html = await response.text();
-
-      const dom = new JSDOM(html);
-      const document = dom.window.document;
-
-      const scripts = document.getElementsByTagName("script");
-      const styles = document.getElementsByTagName("style");
-      Array.from(scripts).forEach((script) => script.remove());
-      Array.from(styles).forEach((style) => style.remove());
-
-      const text = document.body.textContent || "";
-      let normalizedText = text.replace(/\s+/g, " ").trim();
-      
-      // Apply length limits
-      normalizedText = this.applyLengthLimits(
-        normalizedText,
-        requestPayload.max_length ?? 5000,
-        requestPayload.start_index ?? 0
-      );
+      const { filePath, contentType } = await this._fetchAndSave({
+        ...requestPayload,
+        outputFormat: "txt",
+      });
 
       return {
-        content: [{ type: "text", text: normalizedText }],
+        content: [
+          { type: "text", text: `File saved to: ${filePath}` },
+          { type: "text", text: `Content-Type: ${contentType}` },
+        ],
         isError: false,
       };
     } catch (error) {
@@ -126,19 +211,18 @@ export class Fetcher {
 
   static async markdown(requestPayload: RequestPayload) {
     try {
-      const response = await this._fetch(requestPayload);
-      const html = await response.text();
-      const turndownService = new TurndownService();
-      let markdown = turndownService.turndown(html);
-      
-      // Apply length limits
-      markdown = this.applyLengthLimits(
-        markdown,
-        requestPayload.max_length ?? 5000,
-        requestPayload.start_index ?? 0
-      );
-      
-      return { content: [{ type: "text", text: markdown }], isError: false };
+      const { filePath, contentType } = await this._fetchAndSave({
+        ...requestPayload,
+        outputFormat: "markdown",
+      });
+
+      return {
+        content: [
+          { type: "text", text: `File saved to: ${filePath}` },
+          { type: "text", text: `Content-Type: ${contentType}` },
+        ],
+        isError: false,
+      };
     } catch (error) {
       return {
         content: [{ type: "text", text: (error as Error).message }],

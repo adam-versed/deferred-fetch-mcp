@@ -7,7 +7,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { RequestPayloadSchema } from "./types.js";
-import { Fetcher } from "./Fetcher.js";
+import { Fetcher } from "./fetcher.js";
 
 const server = new Server(
   {
@@ -19,7 +19,7 @@ const server = new Server(
       resources: {},
       tools: {},
     },
-  },
+  }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -41,11 +41,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             max_length: {
               type: "number",
-              description: "Maximum number of characters to return (default: 5000)",
+              description:
+                "Maximum number of characters to return (default: 5000)",
             },
             start_index: {
               type: "number",
-              description: "Start content from this character index (default: 0)",
+              description:
+                "Start content from this character index (default: 0)",
             },
           },
           required: ["url"],
@@ -67,11 +69,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             max_length: {
               type: "number",
-              description: "Maximum number of characters to return (default: 5000)",
+              description:
+                "Maximum number of characters to return (default: 5000)",
             },
             start_index: {
               type: "number",
-              description: "Start content from this character index (default: 0)",
+              description:
+                "Start content from this character index (default: 0)",
             },
           },
           required: ["url"],
@@ -94,11 +98,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             max_length: {
               type: "number",
-              description: "Maximum number of characters to return (default: 5000)",
+              description:
+                "Maximum number of characters to return (default: 5000)",
             },
             start_index: {
               type: "number",
-              description: "Start content from this character index (default: 0)",
+              description:
+                "Start content from this character index (default: 0)",
             },
           },
           required: ["url"],
@@ -120,11 +126,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             max_length: {
               type: "number",
-              description: "Maximum number of characters to return (default: 5000)",
+              description:
+                "Maximum number of characters to return (default: 5000)",
             },
             start_index: {
               type: "number",
-              description: "Start content from this character index (default: 0)",
+              description:
+                "Start content from this character index (default: 0)",
             },
           },
           required: ["url"],
