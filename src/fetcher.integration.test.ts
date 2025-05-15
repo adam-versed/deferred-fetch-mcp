@@ -1,9 +1,32 @@
 import fs from "fs/promises";
+import path from "path";
+import os from "os";
+
+// Test custom download directory
+const customDownloadDir = path.join(os.tmpdir(), "mcp_fetch_test_downloads");
+const originalEnv = process.env;
+
+// Set environment variable before importing module
+process.env.MCP_DOWNLOAD_DIR = customDownloadDir;
+
+// Now import the modules after setting the env var
 import { Fetcher } from "./fetcher";
 
 describe("Fetch Integration Tests", () => {
+  beforeAll(async () => {
+    // Ensure test download directory exists
+    await fs.mkdir(customDownloadDir, { recursive: true });
+  });
+
+  afterAll(async () => {
+    // Clean up test directory
+    await fs.rm(customDownloadDir, { recursive: true, force: true });
+    // Restore original env
+    process.env = originalEnv;
+  });
+
   // Test HTML fetching
-  it("should fetch HTML from BBC Sport and save to a file", async () => {
+  it("should fetch HTML and save to custom directory set via env var", async () => {
     // Create request payload
     const requestPayload = {
       url: "https://www.bbc.co.uk/sport/football/scores-fixtures",
@@ -21,6 +44,8 @@ describe("Fetch Integration Tests", () => {
     // The first content item should contain the file path
     expect(result.content[0].type).toBe("text");
     expect(result.content[0].text).toContain("File saved to:");
+    // Should contain our custom directory
+    expect(result.content[0].text).toContain(customDownloadDir);
 
     // The second content item should contain the content type
     expect(result.content[1].type).toBe("text");
@@ -64,6 +89,8 @@ describe("Fetch Integration Tests", () => {
     // The first content item should contain the file path
     expect(result.content[0].type).toBe("text");
     expect(result.content[0].text).toContain("File saved to:");
+    // Should contain our custom directory
+    expect(result.content[0].text).toContain(customDownloadDir);
 
     // The second content item should contain the content type
     expect(result.content[1].type).toBe("text");

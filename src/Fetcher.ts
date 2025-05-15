@@ -5,8 +5,7 @@ import { RequestPayload } from "./types.js";
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-
-const DOWNLOAD_DIR = path.resolve(process.cwd(), ".downloaded_files");
+import { downloadDir } from "./config.js";
 
 export class Fetcher {
   private static applyLengthLimits(
@@ -24,7 +23,7 @@ export class Fetcher {
 
   private static async ensureDownloadDirExists(): Promise<void> {
     try {
-      await fs.mkdir(DOWNLOAD_DIR, { recursive: true });
+      await fs.mkdir(downloadDir, { recursive: true });
     } catch (error) {
       throw new Error(
         `Failed to create download directory: ${(error as Error).message}`
@@ -129,7 +128,7 @@ export class Fetcher {
 
       // Generate a unique filename and write the content to the file
       const filename = this.generateUniqueFilename(url, fileExtension);
-      const filePath = path.join(DOWNLOAD_DIR, filename);
+      const filePath = path.join(downloadDir, filename);
 
       await fs.writeFile(filePath, content, "utf8");
 

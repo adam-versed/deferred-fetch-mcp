@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "./config.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {

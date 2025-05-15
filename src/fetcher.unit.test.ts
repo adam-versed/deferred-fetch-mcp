@@ -5,6 +5,13 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
+// Mock the config module - needs to be before other imports
+jest.mock("./config", () => {
+  return {
+    downloadDir: "/mock/.downloaded_files",
+  };
+});
+
 // Mock the private-ip module
 jest.mock("private-ip");
 
