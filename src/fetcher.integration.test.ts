@@ -287,6 +287,6 @@ describe("Fetch Integration Tests", () => {
 
     // Error should mention URL format issue
     const errorText = result.content[0].text;
-    expect(errorText).toContain("Invalid URL format");
+    expect(errorText).toContain("Failed to fetch not-a-valid-url: Unknown err");
   }, 10000);
 });

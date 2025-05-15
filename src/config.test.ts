@@ -1,4 +1,5 @@
 import path from "path";
+import os from "os";
 
 describe("Config module", () => {
   // Store original env and argv
@@ -22,13 +23,11 @@ describe("Config module", () => {
     process.argv = originalArgv;
   });
 
-  it("should default to .downloaded_files when no args or env vars are set", () => {
+  it("should default to user's home directory with fetch_downloads when no args or env vars are set", () => {
     // Import the config module to test default behavior
     const { downloadDir } = require("./config");
 
-    expect(downloadDir).toEqual(
-      path.resolve(process.cwd(), ".downloaded_files")
-    );
+    expect(downloadDir).toEqual(path.join(os.homedir(), "fetch_downloads"));
   });
 
   it("should use MCP_DOWNLOAD_DIR environment variable when set", () => {
