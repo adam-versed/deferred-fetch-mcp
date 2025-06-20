@@ -8,7 +8,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { RequestPayloadSchema } from "./types.js";
-import { Fetcher } from "./fetcher.js";
+import { Fetcher } from "./Fetcher.js";
 
 const server = new Server(
   {
